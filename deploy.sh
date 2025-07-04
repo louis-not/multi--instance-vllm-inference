@@ -78,23 +78,43 @@ stop_instances() {
     echo "Stopping all LLM inference instances..."
     
     # Stop load balancer
-    if pgrep -f "load_balancer.py" > /dev/null; then
-        echo "  Stopping load balancer..."
-        pkill -f "load_balancer.py" || true
-    fi
+    echo "  Stopping load balancer..."
+    pkill -f "load_balancer.py" 2>/dev/null || true
     
-    # Stop model instances (both single and multi)
-    if pgrep -f "app:app\|simple_app:app" > /dev/null; then
-        echo "  Stopping model instances..."
-        pkill -f "app:app\|simple_app:app" || true
-    fi
+    # Stop model instances using multiple patterns
+    echo "  Stopping model instances..."
+    pkill -f "uvicorn app:app" 2>/dev/null || true
+    pkill -f "uvicorn.*app:app" 2>/dev/null || true
+    
+    # Wait a moment for graceful shutdown
+    sleep 2
+    
+    # Force kill any remaining uvicorn processes
+    echo "  Force stopping any remaining uvicorn processes..."
+    pkill -9 -f "uvicorn.*app" 2>/dev/null || true
+    
+    # Also kill by process name if needed
+    pkill -f "python.*uvicorn" 2>/dev/null || true
+    pkill -9 -f "python.*uvicorn" 2>/dev/null || true
     
     # Clean up PID files
     if [[ -d "logs" ]]; then
         rm -f logs/*.pid
     fi
     
-    echo "✓ All instances stopped"
+    # Wait a moment for GPU memory to be freed
+    echo "  Waiting for GPU memory to be freed..."
+    sleep 3
+    
+    # Verify all processes are stopped
+    remaining_processes=$(pgrep -f "uvicorn.*app" 2>/dev/null || true)
+    if [[ -n "$remaining_processes" ]]; then
+        echo "  Warning: Some processes may still be running:"
+        ps -p $remaining_processes -o pid,cmd 2>/dev/null || true
+        echo "  You may need to manually kill them with: kill -9 $remaining_processes"
+    else
+        echo "✓ All instances stopped successfully"
+    fi
 }
 
 # Function to show status
