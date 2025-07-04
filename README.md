@@ -4,100 +4,90 @@ A high-performance FastAPI server for LLM inference with multi-instance support 
 
 ## Features
 
+- **Unified Deployment**: Single script for both single and multi-instance modes
 - **Multi-Instance Deployment**: Scale horizontally with multiple model instances
 - **Intelligent Load Balancing**: Automatic message distribution across instances
 - **Fast Batch Inference**: Efficient batch processing using vLLM
-- **LoRA Adapter Support**: Dynamic LoRA adapter loading (with compatibility fallback)
+- **Automatic LoRA Fallback**: Dynamic LoRA adapter loading with automatic compatibility fallback
 - **Configurable Parameters**: Environment variables and command-line options
 - **Production Ready**: Health checks, error handling, monitoring, and logging
 
 ## Deployment Options
 
-### Single Instance (Recommended for limited GPU memory)
+### Unified Deployment Script (Recommended)
+
+The `deploy.sh` script provides a unified interface for both single and multi-instance deployments:
 
 ```bash
 # Install dependencies
 pip install -r requirements.txt
 
-# Start single server
-./start_server.sh
+# Single instance (default)
+./deploy.sh
+./deploy.sh --mode single --port 8000
+
+# Multi-instance with load balancer
+./deploy.sh --mode multi --num-instances 4
+
+# Management commands
+./deploy.sh --status
+./deploy.sh --stop
 ```
 
-### Multi-Instance with Load Balancer (For high-memory systems)
-
-```bash
-# Start multiple instances with load balancer
-./start_multi_instance.sh --num-instances 4
-
-# Check deployment status
-./start_multi_instance.sh --status
-
-# Stop all instances
-./start_multi_instance.sh --stop
-```
 
 ## Quick Start Examples
 
-### Single Instance
+### Usage Examples
 ```bash
-# Basic start
-./start_server.sh
+# Basic single instance start (default)
+./deploy.sh
 
-# Custom model and port
-./start_server.sh --model meta-llama/Llama-2-7b-hf --port 8080
+# Single instance with custom configuration
+./deploy.sh --mode single --model meta-llama/Llama-2-7b-hf --port 8080
 
-# With environment variables
-MODEL_NAME=microsoft/DialoGPT-medium ./start_server.sh
-```
+# Multi-instance deployment
+./deploy.sh --mode multi --num-instances 3 --lb-port 8080
 
-### Multi-Instance Deployment
-```bash
-# Start 3 instances with load balancer
-./start_multi_instance.sh --num-instances 3 --lb-port 8080
-
-# Custom configuration
-./start_multi_instance.sh -n 4 -p 9000 -b 9080 --model meta-llama/Llama-2-7b-hf
+# Custom multi-instance configuration
+./deploy.sh --mode multi -n 4 -p 9000 -b 9080 --model meta-llama/Llama-2-7b-hf
 
 # Environment variable configuration
-NUM_INSTANCES=2 MODEL_NAME=Qwen/Qwen2.5-0.5B ./start_multi_instance.sh
+MODEL_NAME=microsoft/DialoGPT-medium ./deploy.sh --mode single
+NUM_INSTANCES=2 MODEL_NAME=Qwen/Qwen2.5-0.5B ./deploy.sh --mode multi
 ```
+
 
 ## Configuration
 
-### Single Instance Options
+### Script Options
 
 ```bash
-./start_server.sh [OPTIONS]
+./deploy.sh [OPTIONS]
 
-Options:
-  -m, --model MODEL           Model name/path
-  -h, --host HOST             Host to bind to (default: 0.0.0.0)
-  -p, --port PORT             Port to bind to (default: 8000)
-  -l, --lora-path PATH        Path to LoRA adapters directory
-  -r, --max-lora-rank RANK    Maximum LoRA rank (default: 64)
-  -d, --dtype DTYPE           Data type (default: float16)
-  -w, --workers WORKERS       Number of workers (default: 1)
-  --help                      Show help message
-```
+Deployment Modes:
+  --mode single               Single instance deployment (default)
+  --mode multi                Multi-instance deployment with load balancer
+  --stop                      Stop all running instances
+  --status                    Show status of running instances
 
-### Multi-Instance Options
-
-```bash
-./start_multi_instance.sh [OPTIONS]
-
-Options:
+Common Options:
   -m, --model MODEL           Model name/path (default: Qwen/Qwen2.5-0.5B-Instruct-AWQ)
   -h, --host HOST             Host to bind to (default: 0.0.0.0)
+  -d, --dtype DTYPE           Data type (default: float16)
+  -l, --lora-path PATH        Path to LoRA adapters directory (default: ./lora_adapters)
+  -r, --max-lora-rank RANK    Maximum LoRA rank (default: 64)
+  --help                      Show help message
+
+Single Instance Options:
+  -p, --port PORT             Port to bind to (default: 8000)
+  -w, --workers WORKERS       Number of workers (default: 1)
+
+Multi-Instance Options:
   -p, --base-port PORT        Base port for instances (default: 8000)
   -b, --lb-port PORT          Load balancer port (default: 8080)
   -n, --num-instances NUM     Number of model instances (default: 2)
-  -l, --lora-path PATH        Path to LoRA adapters directory (default: ./lora_adapters)
-  -r, --max-lora-rank RANK    Maximum LoRA rank (default: 64)
-  -d, --dtype DTYPE           Data type (default: float16)
-  --stop                      Stop all running instances
-  --status                    Show status of running instances
-  --help                      Show help message
 ```
+
 
 ### Environment Variables
 
@@ -227,11 +217,11 @@ curl "http://localhost:8080/health"
 curl "http://localhost:8080/stats"
 ```
 
-### With LoRA Adapter (Compatibility Note)
+### With LoRA Adapter (Automatic Fallback)
 
 ```bash
 # LoRA support with automatic fallback for older GPUs
-./start_server.sh --lora-path /path/to/lora/adapters
+./deploy.sh --mode single --lora-path /path/to/lora/adapters
 
 # LoRA request (automatically falls back if unsupported)
 curl -X POST "http://localhost:8000/inference" \
@@ -243,11 +233,13 @@ curl -X POST "http://localhost:8000/inference" \
   }'
 ```
 
+**Note**: The application automatically detects GPU compatibility and falls back to non-LoRA mode if needed.
+
 ### Production Deployment
 
 ```bash
 # Single instance with optimized settings
-./start_server.sh \
+./deploy.sh --mode single \
   --model meta-llama/Llama-2-7b-hf \
   --host 0.0.0.0 \
   --port 8000 \
@@ -255,7 +247,7 @@ curl -X POST "http://localhost:8000/inference" \
   --dtype float16
 
 # Multi-instance production deployment
-./start_multi_instance.sh \
+./deploy.sh --mode multi \
   --model meta-llama/Llama-2-7b-hf \
   --num-instances 8 \
   --base-port 9000 \
@@ -275,8 +267,8 @@ curl -X POST "http://localhost:8000/inference" \
 - **Instance Statistics**: `GET /stats` (detailed instance information)
 - **Individual Instance Health**: `GET /health` (on each instance port)
 - **Management Commands**: 
-  - `./start_multi_instance.sh --status` (overall status)
-  - `./start_multi_instance.sh --stop` (stop all)
+  - `./deploy.sh --status` (overall status)
+  - `./deploy.sh --stop` (stop all)
 - **Log Files**: 
   - Load balancer: `logs/load_balancer.log`
   - Instances: `logs/instance_0.log`, `logs/instance_1.log`, etc.
@@ -296,7 +288,7 @@ curl -X POST "http://localhost:8000/inference" \
 1. **CUDA Out of Memory**: 
    - Single instance: Reduce `gpu_memory_utilization` or use smaller model
    - Multi-instance: Reduce `--num-instances` or increase GPU memory
-2. **LoRA Compilation Error**: Automatic fallback disables LoRA on older GPUs (Compute Capability < 8.0)
+2. **LoRA Compilation Error**: The application automatically detects and falls back to non-LoRA mode on older GPUs (Compute Capability < 8.0)
 3. **Instance Startup Failure**: Check logs in `logs/` directory for detailed error information
 4. **Load Balancer Connection Error**: Verify all instances are healthy before starting load balancer
 
@@ -320,3 +312,12 @@ curl -X POST "http://localhost:8000/inference" \
 - **GPU**: CUDA-compatible GPU (minimum 2 GiB, recommended 6+ GiB for multi-instance)
 - **Dependencies**: vLLM 0.9.1, FastAPI, Uvicorn, aiohttp
 - **OS**: Linux (tested), Windows/macOS (should work with conda environment)
+
+## Architecture
+
+The LLM Inference Engine uses a single, unified FastAPI application (`app/app.py`) that:
+
+- **Automatic LoRA Detection**: Tries to initialize with LoRA support, automatically falls back to compatibility mode
+- **Memory Optimization**: Configured for both single and multi-instance deployments
+- **GPU Compatibility**: Works on older GPUs (Compute Capability < 8.0) with automatic fallback
+- **Unified Deployment**: Single `deploy.sh` script handles all deployment scenarios

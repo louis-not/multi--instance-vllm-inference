@@ -31,22 +31,31 @@ async def lifespan(app: FastAPI):
     print(f"Max LoRA rank: {max_lora_rank}")
     print(f"Data type: {dtype}")
     
-    # Disable LoRA for older GPUs due to Triton compilation issues
+    # Try LoRA first, fallback to simple mode for compatibility
     try:
+        print("Attempting to initialize with LoRA support...")
         llm_engine = LLM(
             model=model_name,
             enable_lora=True,
             max_lora_rank=max_lora_rank,
-            dtype=dtype
+            dtype=dtype,
+            gpu_memory_utilization=0.8,
+            max_model_len=2048,
+            enforce_eager=True
         )
+        print("✓ LoRA support enabled")
     except Exception as e:
         print(f"LoRA initialization failed: {e}")
         print("Falling back to model without LoRA support...")
         llm_engine = LLM(
             model=model_name,
             enable_lora=False,
-            dtype=dtype
+            dtype=dtype,
+            gpu_memory_utilization=0.8,
+            max_model_len=2048,
+            enforce_eager=True
         )
+        print("✓ LoRA support disabled for compatibility")
     yield
     llm_engine = None
 
